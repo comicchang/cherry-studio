@@ -34,13 +34,52 @@ function resolveDefaultEndpoint(type?: string): EndpointType {
 
 const ImportedProviderSearchDataSchema = z.object({
   id: z.string().min(1),
-  apiKey: z.string().min(1),
+  apiKey: z.string(),
   baseUrl: z.string().min(1),
   type: ProviderTypeSchema.optional(),
   name: z.string().optional()
 })
 
 type ImportedProviderSearchData = z.infer<typeof ImportedProviderSearchDataSchema>
+
+/** magpie gateway import payload (cherrystudio://provider/import spec v1), rendered into search-data form. */
+const ImportedGatewaySearchDataSchema = z.object({
+  kind: z.literal('custom'),
+  id: z.string().min(1),
+  name: z.string().min(1),
+  auth: z.object({ method: z.literal('apiKey'), apiKey: z.string().min(1) }),
+  endpoints: z
+    .array(
+      z.object({
+        protocol: z.enum([
+          ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+          ENDPOINT_TYPE.OPENAI_RESPONSES,
+          ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+          ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT
+        ]),
+        baseUrl: z.string().min(1)
+      })
+    )
+    .min(1)
+})
+
+/** A gateway payload with one baseUrl per endpoint; the primary host feeds the confirm dialog. */
+function gatewayPayloadToImportedSearchData(payload: unknown): ImportedProviderSearchData | null {
+  const parsed = ImportedGatewaySearchDataSchema.safeParse(payload)
+  if (!parsed.success) {
+    return null
+  }
+
+  const endpoints = parsed.data.endpoints
+  const baseUrl = endpoints.find((endpoint) => endpoint.protocol === ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS)?.baseUrl
+
+  return {
+    id: parsed.data.id,
+    apiKey: parsed.data.auth.apiKey,
+    baseUrl,
+    name: parsed.data.name
+  }
+}
 
 /** Consumes one provider deep-link import payload from the URL into create/update + add-api-key calls. */
 export function useProviderDeepLinkImport(
@@ -124,15 +163,22 @@ export function useProviderDeepLinkImport(
     }
 
     try {
-      const parsed = ImportedProviderSearchDataSchema.safeParse(JSON.parse(searchAddProviderData))
+      const json = JSON.parse(searchAddProviderData)
+      const parsed = ImportedProviderSearchDataSchema.safeParse(json)
 
-      if (!parsed.success) {
-        toast.error(t('settings.models.provider_key_add_failed_by_invalid_data'))
-        void navigate({ to: '/settings/provider' })
+      if (parsed.success) {
+        void importProvider(parsed.data)
         return
       }
 
-      void importProvider(parsed.data)
+      const gatewayData = gatewayPayloadToImportedSearchData(json)
+      if (gatewayData) {
+        void importProvider(gatewayData)
+        return
+      }
+
+      toast.error(t('settings.models.provider_key_add_failed_by_invalid_data'))
+      void navigate({ to: '/settings/provider' })
     } catch (error) {
       logger.error('Failed to parse provider deep link import data', error as Error)
       toast.error(t('settings.models.provider_key_add_failed_by_invalid_data'))

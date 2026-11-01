@@ -18,6 +18,7 @@ import type { McpServer } from '@shared/data/types/mcpServer'
 
 import { parseMcpInstallProtocolUrl } from './handlers/mcpInstall'
 import { handleNavigateProtocolUrl } from './handlers/navigate'
+import { handleProviderImportProtocolUrl } from './handlers/providerImport'
 import { handleProvidersProtocolUrl } from './handlers/providersImport'
 
 export const CHERRY_STUDIO_PROTOCOL = 'cherrystudio'
@@ -70,7 +71,8 @@ export class ProtocolService extends BaseService {
 
     // 3) Windows/Linux second-instance: sole owner.
     //    - argv carries `cherrystudio://...` → dispatch to URL handler; each handler
-    //      self-routes focus (mcp / navigate raise Main, providers / oauth do not),
+    //      self-routes focus (mcp / navigate raise Main, providers / provider
+    //      import / oauth do not),
     //      so we never raise Main behind their backs.
     //    - argv carries no URL → plain re-launch (user double-clicked the icon while
     //      the app is running); surface the main window. MainWindowService is
@@ -193,6 +195,11 @@ export class ProtocolService extends BaseService {
           handleProvidersProtocolUrl(urlObj).catch((error) =>
             logger.error('Failed to handle providers protocol URL', error as Error)
           )
+          return
+        case 'provider':
+          // Payload carries an attribution key (non-secret), but it still gets
+          // its own switch case per the default-broadcast security TODO below.
+          handleProviderImportProtocolUrl(urlObj)
           return
         case 'navigate':
           handleNavigateProtocolUrl(urlObj)
