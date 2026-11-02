@@ -38,6 +38,7 @@ export const cherryCloudHandlers: IpcHandlersFor<typeof cherryCloudRequestSchema
         value
       ])
     )
-    application.get('AnalyticsService').trackEvent(event, data)
+    const status = await application.get('CherryCloudService').getStatus()
+    application.get('AnalyticsService').trackEvent(event, data, status.accountId)
   }
 }
