@@ -1340,7 +1340,8 @@ const AgentComposerInner = ({
     scopeKey: launchOptions?.editing ? `${sessionTopicId}:edit:${launchOptions.editing.messageId}` : sessionTopicId,
     status: sendDisabled || launchOptions?.editing ? undefined : sessionStatus,
     lastCompletedAt,
-    onDrain: sendQueuedPayload
+    onDrain: sendQueuedPayload,
+    blocked: !!quotaExhaustion
   })
   releaseFollowupEditRef.current = releaseEdit
 
@@ -1643,6 +1644,7 @@ const AgentComposerInner = ({
                   }}
                   onRemove={removeFollowup}
                   onReorder={reorderFollowups}
+                  isSteerDisabled={quotaExhaustion ? () => true : undefined}
                 />
               ) : undefined}
             </>
